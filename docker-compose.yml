@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: knowledgepilot-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kp_user
+      POSTGRES_PASSWORD: kp_local_dev_password
+      POSTGRES_DB: knowledgepilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kp_user -d knowledgepilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: knowledgepilot-backend
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      SQLITE_PATH: /app/data/knowledgepilot_ai.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: knowledgepilot-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgvector_data:
+  backend_data:
